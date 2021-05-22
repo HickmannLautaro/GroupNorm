@@ -6,15 +6,18 @@ import sys
 
 def get_parsed_in():
     parser = argparse.ArgumentParser(description="Configurations to run normalization experiments with ResNet")
-    parser.add_argument('--continue_train', action='store_true', help='continue training: load the latest checkpoint and continue train')
+    parser.add_argument('--continue_train', action='store_true', help='continue training: load the latest checkpoint and continue training')
     parser.add_argument('--replace', action='store_true', help='overwrite previous run if it exists')
     parser.add_argument('--start_epoch', type=int, default=1, help='Differentiate multiple runs for statistical comparison')
-    parser.add_argument('--ResNet', type=int, default=18, choices=[18, 34, 50], help='Defines what Resnet model to load')
+    parser.add_argument('--ResNet', type=int, default=18, choices=[18, 34], help='Defines what Resnet model to use')
     parser.add_argument('--batch_size', type=int, default=32, choices=[32, 16, 8, 4, 2], help='batch size per worker')
     parser.add_argument('--norm', type=str, default='GN', choices=['BN', 'GN'], help='decide if BN (batch normalization) or GN (group normalization is applied)')
     parser.add_argument('--run', type=int, default=1, help='Differentiate multiple runs for statistical comparison')
 
     arguments = vars(parser.parse_args())
+    if arguments['continue_train'] and arguments['replace']:
+        print("Incompatible options to continue training and remove it to replace choose one or the other")
+        sys.exit()
     return arguments
 
 
