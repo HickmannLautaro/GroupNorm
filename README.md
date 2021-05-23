@@ -10,3 +10,4 @@ using conda:
 - jupyterlab 3.0.16
 - matplotlib 3.3.4
 - tensorflow-datasets
+- adamW from TensorFlow Addons
