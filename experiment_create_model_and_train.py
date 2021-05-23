@@ -15,21 +15,13 @@ class LearningRateLogger(tf.keras.callbacks.Callback):
         self._supports_tf_logs = True
 
     def on_epoch_end(self, epoch, logs=None):
-        if logs is None or "lr" in logs:
-            return
-        logs["lr"] = self.model.optimizer.lr
-
         if logs is None or "learning_rate" in logs:
             return
-        logs["learning_rate"] = self.model.optimizer.learning_rate
-
-        # if logs is None or "weight_decay" in logs:
-        #     return
-        # logs["weight_decay"] = self.model.optimizer.weight_decay
+        logs["learning_rate"] = self.model.optimizer.lr
 
 
 class group_norm(Layer):
-    def __init__(self, last=False, G=8, eps=0.00001): #  G=32
+    def __init__(self, last=False, G=8, eps=0.00001):  # G=32
         super(group_norm, self).__init__()
         self.eps = eps
         self.G = G
@@ -135,7 +127,7 @@ def get_uncompiled_resnet(inputs, arguments):
         y = group_norm(last=False)(y)
     y = ReLU()(y)
 
-    #y = MaxPooling2D(pool_size=(3, 3), strides=(2, 2), padding='same')(y)
+    # y = MaxPooling2D(pool_size=(3, 3), strides=(2, 2), padding='same')(y)
 
     res_block = residual_block
 
@@ -163,7 +155,6 @@ def get_uncompiled_resnet(inputs, arguments):
         y = res_block(y, nb_filters=64, arguments=arguments)
     y = res_block(y, nb_filters=64, arguments=arguments, last=True)
 
-
     # Classifier
     y = GlobalAveragePooling2D()(y)
     outputs = Dense(num_classes, activation='softmax')(y)
@@ -176,15 +167,19 @@ def get_uncompiled_resnet(inputs, arguments):
     return model
 
 
-def scheduler(epoch, lr):
+def get_scheduler(arguments):
+    if arguments['epochs'] == 50:
+        mod = 15
+    else:
+        mod = 30
 
-    if epoch > 0 and epoch % 15 == 0: #30
-        lr= lr / 10
+    def scheduler(epoch, lr):
+        if epoch > 0 and (epoch + 1) % mod == 0:  # Modified from every 30 of 100 epoch to every 15 of 50 for quicker convergence
+            lr = lr / 10
 
-    print("epoch :", epoch, " lr :", lr)
-    return lr
-
-
+        print("epoch :", epoch + 1, " lr :", lr)
+        return lr
+    return scheduler
 
 def main():
     # Get command line arguments
@@ -199,28 +194,36 @@ def main():
     # sys.stderr = open(f'{log_path}/output_log.log', 'w')
     print("Training started: " + str(datetime.now()))
 
-    # Turn memory growth an to run multiple scripts in parallel on the same GPU
-    gpu_devices = tf.config.experimental.list_physical_devices('GPU')
-    tf.config.experimental.set_memory_growth(gpu_devices[0], True)
+    if arguments['cpu']:
+        os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+    else:
+        # Turn memory growth om to run multiple scripts in parallel on the same GPU
+        gpu_devices = tf.config.experimental.list_physical_devices('GPU')
+        if len(gpu_devices)>0:
+            tf.config.experimental.set_memory_growth(gpu_devices[0], True)
+        else:
+            print("GPU selected but no GPUs available")
+            sys.exit(1)
     print("Tensorflow version: ", tf.__version__)
     print("Training config: " + str(arguments))
 
     # Get data
-    train_ds,valid_ds = get_data(arguments)
-    #Get model and plot summary
+    train_ds, valid_ds = get_data(arguments)
+
+    # Get model and plot summary
     model = get_uncompiled_resnet(inputs=Input(shape=(32, 32, 3), batch_size=arguments['batch_size']), arguments=arguments)
     model.summary()
 
     model = get_uncompiled_resnet(inputs=Input(shape=(32, 32, 3)), arguments=arguments)
 
-
-    lr = 0.01 * (arguments['batch_size'] / 32)  # modified from 0.1 to get convergence on ResNet20
+    lr = 0.001 #0.01 * (arguments['batch_size'] / 32)  # modified from 0.1 to get convergence on ResNet20
 
     optimizer = tfa.optimizers.AdamW(weight_decay=0.0001, learning_rate=lr)
 
     model.compile(optimizer=optimizer, loss='sparse_categorical_crossentropy', metrics=['accuracy'])
 
     # callbakcs
+    scheduler = get_scheduler(arguments)
     scheduler_callback = tf.keras.callbacks.LearningRateScheduler(scheduler)
 
     tensorboard = tf.keras.callbacks.TensorBoard(log_dir=log_path, histogram_freq=10, write_graph=False, profile_batch=0)
@@ -233,8 +236,7 @@ def main():
         save_best_only=True,
         verbose=1)
 
-    model.fit(train_ds, epochs=50, validation_data=valid_ds, callbacks=[scheduler_callback, LearningRateLogger(), model_checkpoint_callback, tensorboard])
-
+    model.fit(train_ds, epochs=arguments['epochs'], validation_data=valid_ds, callbacks=[scheduler_callback, LearningRateLogger(), model_checkpoint_callback, tensorboard])  # Fromm 100 to 50 epochs
 
 
 if __name__ == "__main__":
