@@ -29,7 +29,7 @@ class LearningRateLogger(tf.keras.callbacks.Callback):
 
 
 class group_norm(Layer):
-    def __init__(self, last=False, G=32, eps=0.00001):
+    def __init__(self, last=False, G=8, eps=0.00001): #  G=32
         super(group_norm, self).__init__()
         self.eps = eps
         self.G = G
@@ -122,68 +122,63 @@ def get_data_aug():
     return data_augmentation
 
 
-def get_uncompiled_resnet(arguments):
+def get_uncompiled_resnet(inputs, arguments):
     data_augmentation = get_data_aug()
     num_classes = 10
-    inputs = Input(shape=(32, 32, 3))
 
     y = data_augmentation(inputs)
     # initial convolution
-    y = Conv2D(64, (7, 7), strides=(2, 2), padding='same')(y)
+    y = Conv2D(16, (3, 3), strides=(1, 1), padding='same')(y)
     if arguments['norm'] == 'BN':
         y = BatchNormalization()(y)
     else:
         y = group_norm(last=False)(y)
     y = ReLU()(y)
 
-    y = MaxPooling2D(pool_size=(3, 3), strides=(2, 2), padding='same')(y)
+    #y = MaxPooling2D(pool_size=(3, 3), strides=(2, 2), padding='same')(y)
 
     res_block = residual_block
 
     # Block 1
+    y = res_block(y, nb_filters=16, arguments=arguments)
+    y = res_block(y, nb_filters=16, arguments=arguments)
+    if arguments["ResNet"] == 32:
+        y = res_block(y, nb_filters=16, arguments=arguments)
+        y = res_block(y, nb_filters=16, arguments=arguments)
+    y = res_block(y, nb_filters=16, arguments=arguments, last=True)
+
+    # Block 2
+    y = res_block(y, nb_filters=32, projection_shortcut=True, arguments=arguments)
+    y = res_block(y, nb_filters=32, arguments=arguments)
+    if arguments["ResNet"] == 32:
+        y = res_block(y, nb_filters=32, arguments=arguments)
+        y = res_block(y, nb_filters=32, arguments=arguments)
+    y = res_block(y, nb_filters=32, arguments=arguments, last=True)
+
+    # Block 3
+    y = res_block(y, nb_filters=64, projection_shortcut=True, arguments=arguments)
     y = res_block(y, nb_filters=64, arguments=arguments)
-    if arguments["ResNet"] == 34:
+    if arguments["ResNet"] == 32:
+        y = res_block(y, nb_filters=64, arguments=arguments)
         y = res_block(y, nb_filters=64, arguments=arguments)
     y = res_block(y, nb_filters=64, arguments=arguments, last=True)
 
-    # Block 2
-    y = res_block(y, nb_filters=128, projection_shortcut=True, arguments=arguments)
-    if arguments["ResNet"] == 34:
-        y = res_block(y, nb_filters=128, arguments=arguments)
-        y = res_block(y, nb_filters=128, arguments=arguments)
-    y = res_block(y, nb_filters=128, arguments=arguments, last=True)
-
-    # Block 3
-    y = res_block(y, nb_filters=256, projection_shortcut=True, arguments=arguments)
-    if arguments["ResNet"] == 34:
-        y = res_block(y, nb_filters=256, arguments=arguments)
-        y = res_block(y, nb_filters=256, arguments=arguments)
-        y = res_block(y, nb_filters=256, arguments=arguments)
-        y = res_block(y, nb_filters=256, arguments=arguments)
-    y = res_block(y, nb_filters=256, arguments=arguments, last=True)
-
-    # Block 4
-    y = res_block(y, nb_filters=512, projection_shortcut=True, arguments=arguments)
-    if arguments["ResNet"] == 34:
-        y = res_block(y, nb_filters=512, arguments=arguments)
-    y = res_block(y, nb_filters=512, arguments=arguments, last=True)
 
     # Classifier
     y = GlobalAveragePooling2D()(y)
     outputs = Dense(num_classes, activation='softmax')(y)
 
-    if arguments["ResNet"] == 34:
-        model = Model(inputs=inputs, outputs=outputs, name="ResNet34")
+    if arguments["ResNet"] == 32:
+        model = Model(inputs=inputs, outputs=outputs, name="ResNet32")
     else:
         model = Model(inputs=inputs, outputs=outputs, name="ResNet18")
-    model.summary()
 
     return model
 
 
 def scheduler(epoch, lr):
 
-    if epoch > 0 and epoch % 30 == 0:
+    if epoch > 0 and epoch % 15 == 0: #30
         lr= lr / 10
 
     print("epoch :", epoch, " lr :", lr)
@@ -210,12 +205,16 @@ def main():
     print("Tensorflow version: ", tf.__version__)
     print("Training config: " + str(arguments))
 
-
+    # Get data
     train_ds,valid_ds = get_data(arguments)
+    #Get model and plot summary
+    model = get_uncompiled_resnet(inputs=Input(shape=(32, 32, 3), batch_size=arguments['batch_size']), arguments=arguments)
+    model.summary()
 
-    model = get_uncompiled_resnet(arguments,)
+    model = get_uncompiled_resnet(inputs=Input(shape=(32, 32, 3)), arguments=arguments)
 
-    lr = 0.01 * (arguments['batch_size'] / 32)  # modified from 0.1 to get convergence on ResNet18
+
+    lr = 0.01 * (arguments['batch_size'] / 32)  # modified from 0.1 to get convergence on ResNet20
 
     optimizer = tfa.optimizers.AdamW(weight_decay=0.0001, learning_rate=lr)
 
@@ -234,7 +233,7 @@ def main():
         save_best_only=True,
         verbose=1)
 
-    model.fit(train_ds, epochs=100, validation_data=valid_ds, callbacks=[scheduler_callback, LearningRateLogger(), model_checkpoint_callback, tensorboard])
+    model.fit(train_ds, epochs=50, validation_data=valid_ds, callbacks=[scheduler_callback, LearningRateLogger(), model_checkpoint_callback, tensorboard])
 
 
 

@@ -12,7 +12,7 @@ def get_parsed_in():
     parser.add_argument('--replace', action='store_true', help='overwrite previous run if it exists')
     #parser.add_argument('--rm_chkpts', action='store_true', help=' Delete all intermediate checkpoints')
     parser.add_argument('--start_epoch', type=int, default=1, help='Differentiate multiple runs for statistical comparison')
-    parser.add_argument('--ResNet', type=int, default=18, choices=[18, 34], help='Defines what Resnet model to use')
+    parser.add_argument('--ResNet', type=int, default=20, choices=[20, 32], help='Defines what Resnet model to use')
     parser.add_argument('--batch_size', type=int, default=32, choices=[32, 16, 8, 4, 2], help='batch size per worker')
     parser.add_argument('--norm', type=str, default='GN', choices=['BN', 'GN'], help='decide if BN (batch normalization) or GN (group normalization is applied)')
     parser.add_argument('--run', type=int, default=1, help='Differentiate multiple runs for statistical comparison')
@@ -45,22 +45,22 @@ def create_folders(arguments):
 
         time.sleep(1)
 
-        # Create file structures
-        try:
-            os.makedirs(models_path)
-        except OSError:
-            print("Creation of the directory %s failed, if replacement is desired start script with argument --replace " % models_path)
-            sys.exit(1)
-        else:
-            print("Successfully created the directory %s" % models_path)
+    # Create file structures
+    try:
+        os.makedirs(models_path)
+    except OSError:
+        print("Creation of the directory %s failed, if replacement is desired start script with argument --replace " % models_path)
+        sys.exit(1)
+    else:
+        print("Successfully created the directory %s" % models_path)
 
-        try:
-            os.makedirs(log_path)
-        except OSError:
-            print("Creation of the directory %s failed, if replacement is desired start script with argument --replace " % log_path)
-            sys.exit(1)
-        else:
-            print("Successfully created the directory %s" % log_path)
+    try:
+        os.makedirs(log_path)
+    except OSError:
+        print("Creation of the directory %s failed, if replacement is desired start script with argument --replace " % log_path)
+        sys.exit(1)
+    else:
+        print("Successfully created the directory %s" % log_path)
 
     return log_path, models_path
 
@@ -93,7 +93,7 @@ def get_data(arguments):
     train_ds = tf.data.Dataset.from_tensor_slices((x_train, y_train))
     valid_ds = tf.data.Dataset.from_tensor_slices((x_val, y_val))
 
-    train_ds = train_ds.map(lambda image, label: (tf.image.rot90(image, tf.random.uniform(shape=[], minval=0, maxval=4, dtype=tf.int32)), label)).shuffle(buffer_size=x_train.shape[0])
+    #train_ds = train_ds.map(lambda image, label: (tf.image.rot90(image, tf.random.uniform(shape=[], minval=0, maxval=4, dtype=tf.int32)), label)).shuffle(buffer_size=x_train.shape[0])
     train_ds = train_ds.batch(arguments['batch_size'])
     valid_ds = valid_ds.batch(arguments['batch_size'])
     return  train_ds, valid_ds
