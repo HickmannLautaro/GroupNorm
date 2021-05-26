@@ -87,6 +87,8 @@ def main():
             latest.sort()
             latest = latest[-1]
             init_ep = int(latest[-4:])
+            if arguments['cont_epoch'] != -1:
+                init_ep = arguments['cont_epoch']
             mod = f"Loading model from {latest}, starting epoch {init_ep}"
             model = load_model(arguments, models_path + '/' + latest)
             best_accu = model.evaluate(eval)[1]
@@ -97,17 +99,10 @@ def main():
 
     scheduler_callback = tf.keras.callbacks.LearningRateScheduler(get_scheduler(arguments))
     csv_logger = tf.keras.callbacks.CSVLogger(os.path.join(log_path, 'training.log'))
-
+    csv_logger_evaluation = tf.keras.callbacks.CSVLogger(os.path.join(log_path, 'evaluate.log'))
     tensorboard = tf.keras.callbacks.TensorBoard(log_dir=log_path, histogram_freq=10, write_graph=False, profile_batch=0)
 
     custom_save = CustomSaveModel(models_path, best_accu)
-    model_checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
-        filepath=models_path + '/cp-{epoch:04d}/',
-        save_weights_only=False,
-        monitor='val_sparse_categorical_accuracy',
-        mode='max',
-        save_best_only=True,
-        verbose=1)
 
     print(f"Experiment ResNet{arguments['ResNet'] * 6 + 2} on CIFAR10, config:"
           f"\n-----------------------------------------------------------------"
@@ -117,10 +112,12 @@ def main():
           f"\nepochs: {arguments['epochs']}"
           f"\nnormalization: {arguments['norm']}"
           f"\nUse weight decay: {arguments['weight_decay']}"
-          f"\nTrainning log in {os.path.join(log_path, 'training.log')}"
+          f"\nTrainning log in: {os.path.join(log_path, 'training.log')}"
+          f"\nTrainning checkpoints in: {models_path}"
           f"\nTraining started at: {str(datetime.now())}"
           f"\n-----------------------------------------------------------------")
 
+    # Validation on the test set as proposed in the ResNet paper Deep Residual Learning for Image Recognition (https://arxiv.org/pdf/1512.03385.pdf)
     model.fit(train, epochs=arguments['epochs'], validation_data=eval, initial_epoch=init_ep, callbacks=[scheduler_callback, csv_logger, tensorboard, custom_save])  # Fromm 100 to 30 (25*4 + 5 extra )epochs
 
     # delete unused checkpoints

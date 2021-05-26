@@ -12,6 +12,7 @@ def get_parsed_in():
     parser = argparse.ArgumentParser(description="Configurations to run normalization experiments with ResNet")
     parser.add_argument('--replace', action='store_true', help='overwrite previous run if it exists')
     parser.add_argument('--continue', action='store_true', help='continue training: load the latest checkpoint and continue training')
+    parser.add_argument('--cont_epoch', type=int, default=-1, help='Used together with continue, overwrites the saved epoch of the checkpoint and sets the initial epoch for continue training')
     parser.add_argument('--cpu', action='store_true', help='train on inly cpu')
     parser.add_argument('--ResNet', type=int, default=3, choices=[3, 5], help='Defines what Resnet model to use, 3-> ResNet 20, 5-> ResNet 32')
     parser.add_argument('--batch_size', type=int, default=32, choices=[32, 16, 8, 4, 2], help='batch size per worker')
@@ -31,9 +32,9 @@ def get_parsed_in():
 
 def create_folders(arguments):
     if arguments['weight_decay']:
-        path = os.path.join(arguments['norm'], "ResNet" + str(arguments['ResNet']*6+2),"weight_decay" ,"batch_" + str(arguments['batch_size']), "run_" + str(arguments['run']))
+        path = os.path.join(arguments['norm'], "ResNet" + str(arguments['ResNet']*6+2),"weight_decay" ,"epochs_"+ str(arguments['epochs']),"batch_" + str(arguments['batch_size']), "run_" + str(arguments['run']))
     else:
-        path = os.path.join(arguments['norm'], "ResNet" + str(arguments['ResNet']*6+2),"no_weight_decay","batch_" + str(arguments['batch_size']), "run_" + str(arguments['run']))
+        path = os.path.join(arguments['norm'], "ResNet" + str(arguments['ResNet']*6+2),"no_weight_decay","epochs_"+ str(arguments['epochs']),"batch_" + str(arguments['batch_size']), "run_" + str(arguments['run']))
 
     log_path = os.path.join("train_outputs/logs", path)
     models_path = os.path.join("train_outputs/checkpoints", path)
