@@ -75,7 +75,7 @@ class resnet_block_type_a(tf.keras.Model):
         if self.stride == 2:
             x = tf.keras.layers.add([x, self.conv_downsample(input_tensor)])
         else:
-            x = tf.keras.layers.add([x , input_tensor])
+            x = tf.keras.layers.add([x, input_tensor])
 
         x = tf.keras.layers.ReLU()(x)
         return x
@@ -123,7 +123,6 @@ class res_net(tf.keras.Model):
         self.global_pooling = tf.keras.layers.GlobalAveragePooling2D()
         self.classifier = tf.keras.layers.Dense(classification_classes)
 
-
     def call(self, inputs, training=None, **kwargs):
         if self.expe_data_aug:  # Data augmentation
             y = self.RF(inputs)
@@ -140,16 +139,14 @@ class res_net(tf.keras.Model):
         return classified
 
     def summary(self, **kwargs):
-        x = tf.keras.layers.Input(shape=(32,32,3))
-        model = tf.keras.Model( inputs=[x], outputs= self.call(x))
+        x = tf.keras.layers.Input(shape=(32, 32, 3))
+        model = tf.keras.Model(inputs=[x], outputs=self.call(x))
         return model.summary()
 
     def build_graph(self, **kwargs):
-        x = tf.keras.layers.Input(shape=(32,32,3))
-        model = tf.keras.Model( inputs=[x], outputs= self.call(x))
+        x = tf.keras.layers.Input(shape=(32, 32, 3))
+        model = tf.keras.Model(inputs=[x], outputs=self.call(x))
         return model
-
-
 
 
 def get_resnet_n(arguments):
@@ -194,7 +191,7 @@ def save_model(path, model, epoch):
         pickle.dump(weight_values, f)
 
 
-def load_model(arguments, path):
+def load_model_with_optimizer(arguments, path):
     model, init_ep = get_resnet_n(arguments)
     model.load_weights(path + '/weights.h5')
     # model._make_train_function()
@@ -207,4 +204,10 @@ def load_model(arguments, path):
     [x.assign(y) for x, y in zip(model.trainable_variables, saved_vars)]
     model.optimizer.set_weights(weight_values)
 
+    return model
+
+
+def load_model_weights(arguments, path):
+    model, init_ep = get_resnet_n(arguments)
+    model.load_weights(path + '/weights.h5')
     return model

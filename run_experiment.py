@@ -5,7 +5,7 @@ import tensorflow as tf
 import tensorflow_addons as tfa
 import os
 from utils.train_utils import get_parsed_in, create_folders, get_data, select_device
-from utils.ResNet_network import get_resnet_n, load_model, save_model
+from utils.ResNet_network import get_resnet_n, load_model_with_optimizer, save_model
 import shutil
 from datetime import datetime
 
@@ -90,7 +90,7 @@ def main():
             if arguments['cont_epoch'] != -1:
                 init_ep = arguments['cont_epoch']
             mod = f"Loading model from {latest}, starting epoch {init_ep}"
-            model = load_model(arguments, models_path + '/' + latest)
+            model = load_model_with_optimizer(arguments, models_path + '/' + latest)
             best_accu = model.evaluate(eval)[1]
     else:
         mod = "New model"
