@@ -3,7 +3,6 @@ import os
 import shutil
 import sys
 import time
-from tensorflow.keras import datasets
 import tensorflow as tf
 import tensorflow_datasets as tfds
 
@@ -13,14 +12,14 @@ def get_parsed_in():
     parser.add_argument('--replace', action='store_true', help='overwrite previous run if it exists')
     parser.add_argument('--continue', action='store_true', help='continue training: load the latest checkpoint and continue training')
     parser.add_argument('--cont_epoch', type=int, default=-1, help='Used together with continue, overwrites the saved epoch of the checkpoint and sets the initial epoch for continue training')
-    parser.add_argument('--experimental_data_aug', action='store_true', help='continue training: load the latest checkpoint and continue training')
-    parser.add_argument('--cpu', action='store_true', help='train on inly cpu')
+    parser.add_argument('--experimental_data_aug', action='store_true', help='Use experimental data augmentation inside the network instead of the one before the network (Only used for epochs = 100)')
+    parser.add_argument('--cpu', action='store_true', help='train on only cpu')
     parser.add_argument('--ResNet', type=int, default=3, choices=[3, 5], help='Defines what Resnet model to use, 3-> ResNet 20, 5-> ResNet 32')
     parser.add_argument('--batch_size', type=int, default=32, choices=[32, 16, 8, 4, 2], help='batch size per worker')
     parser.add_argument('--epochs', type=int, default=30, choices=[30, 100], help='training epochs')
     parser.add_argument('--norm', type=str, default='GN', choices=['BN', 'GN'], help='decide if BN (batch normalization) or GN (group normalization is applied)')
     parser.add_argument('--run', type=int, default=1, help='Differentiate multiple runs for statistical comparison')
-    parser.add_argument('--weight_decay', action='store_true', help='Set to use AdamW as optimizer and use weight decay (unstable)')
+    parser.add_argument('--weight_decay', action='store_true', help='Set to use SGDW (stochastic gradient with weight decay) as optimizer and use weight decay (unstable) otherwise adam is used.')
 
     arguments = vars(parser.parse_args())
 
