@@ -42,9 +42,12 @@ optional arguments:
 ```
 --experimental_data_aug use experimental  keras layers for data augmentation, instead of the .map() function on the tfds dataset.
 
-For example, for the first run of batch size 2 for both group and batch normalization:
+For example, for the first run of batch size 2 for both Group normalization:
 ```shell
 python run_experiment.py --batch_size 2 --norm BN --run 1
+```
+and Batch normalization:
+```shell
 python run_experiment.py --batch_size 2 --norm GN --run 1
 ```
 This script trains a ResNet 20 network on the CIFAR-10 dataset for 30 epochs using data augmentation, lr decay and saves the weights of the best epoch,  a csv log per epoch, and a tensorboard log.
