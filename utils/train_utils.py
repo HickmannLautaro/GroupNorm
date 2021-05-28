@@ -13,6 +13,7 @@ def get_parsed_in():
     parser.add_argument('--replace', action='store_true', help='overwrite previous run if it exists')
     parser.add_argument('--continue', action='store_true', help='continue training: load the latest checkpoint and continue training')
     parser.add_argument('--cont_epoch', type=int, default=-1, help='Used together with continue, overwrites the saved epoch of the checkpoint and sets the initial epoch for continue training')
+    parser.add_argument('--experimental_data_aug', action='store_true', help='continue training: load the latest checkpoint and continue training')
     parser.add_argument('--cpu', action='store_true', help='train on inly cpu')
     parser.add_argument('--ResNet', type=int, default=3, choices=[3, 5], help='Defines what Resnet model to use, 3-> ResNet 20, 5-> ResNet 32')
     parser.add_argument('--batch_size', type=int, default=32, choices=[32, 16, 8, 4, 2], help='batch size per worker')
@@ -114,7 +115,7 @@ def get_data(arguments):
     if arguments['epochs'] == 30:
         ds_train = ds_train.map(normalize_img).repeat(4).map(prepare_dataset).batch(batch_size).shuffle(BUFFER_SIZE).cache()
     else:
-        ds_train = ds_train.map(normalize_img).map(prepare_dataset).batch(batch_size).shuffle(BUFFER_SIZE).cache()
+        ds_train = ds_train .map(normalize_img).batch(batch_size).shuffle(BUFFER_SIZE).cache()
 
     ds_test = ds_test.map(normalize_img).batch(batch_size)
     return ds_train, ds_test
