@@ -1,8 +1,8 @@
+import os
 import pickle
 
 import tensorflow as tf
 import tensorflow_addons as tfa
-import os
 
 
 class group_normalization_layer(tf.keras.layers.Layer):
@@ -11,13 +11,13 @@ class group_normalization_layer(tf.keras.layers.Layer):
     This layer is based on the modified code proposed in the paper, so that it can be used in channel last configuration
     """
 
-    def __init__(self, gamma_inint='ones', G=8, eps=0.00001):  # G=32
+    def __init__(self, gamma_initialization='ones', groups=8, eps=0.00001):  # G=32
         super(group_normalization_layer, self).__init__()
         self.eps = eps
         # G: number of groups for GN
-        self.G = G
+        self.G = groups
         # gamma, beta: scale and offset, with shape [1,1,1, C]
-        self.gamma_initializer = gamma_inint
+        self.gamma_initializer = gamma_initialization
 
     def build(self, input_shape):
         # input_shape: N,H,W,C
@@ -51,16 +51,18 @@ class resnet_block_type_a(tf.keras.Model):
         super(resnet_block_type_a, self).__init__(name='')
         self.stride = stride
         self.conv2a = tf.keras.layers.Conv2D(filters, kernel_size, strides=stride, padding='same', kernel_initializer=tf.keras.initializers.HeNormal(), bias_initializer=tf.keras.initializers.Zeros())
+
         if normalization == 'BN':
             self.norm2a = tf.keras.layers.BatchNormalization()
         else:
             self.norm2a = group_normalization_layer()
 
         self.conv2b = tf.keras.layers.Conv2D(filters, kernel_size, padding='same', kernel_initializer=tf.keras.initializers.HeNormal(), bias_initializer=tf.keras.initializers.Zeros())
+
         if normalization == 'BN':
             self.norm2b = tf.keras.layers.BatchNormalization()
         else:
-            self.norm2b = group_normalization_layer(gamma_inint='zeros')
+            self.norm2b = group_normalization_layer(gamma_initialization='zeros')
 
         self.conv_downsample = tf.keras.layers.Conv2D(filters, kernel_size=(1, 1), strides=(2, 2), kernel_initializer=tf.keras.initializers.HeNormal(), bias_initializer=tf.keras.initializers.Zeros())
 
@@ -85,7 +87,7 @@ class resnet_block_type_a(tf.keras.Model):
         model = tf.keras.Model(inputs=[x], outputs=self.call(x))
         return model.summary()
 
-    def build_graph(self, **kwargs):
+    def build_graph(self):
         x = tf.keras.layers.Input(shape=(32, 32, 16))
         model = tf.keras.Model(inputs=[x], outputs=self.call(x))
         return model
@@ -93,38 +95,42 @@ class resnet_block_type_a(tf.keras.Model):
 
 class res_net(tf.keras.Model):
     """
-   Impleentation of the ResNet 6n+2, e.g.with n=3 ResNet20 and n=5 ResNet32 as described in Deep Residual Learning for Image Recognition (https://arxiv.org/pdf/1512.03385.pdf)
+   Implementation of the ResNet 6n+2, e.g.with n=3 ResNet20 and n=5 ResNet32 as described in Deep Residual Learning for Image Recognition (https://arxiv.org/pdf/1512.03385.pdf)
    :param norm: What normalization to use BN: for batch normalization or GN: for group normalization
    :return: Compiled ResNet20 model
    """
 
-    def __init__(self, n, normalization, classification_classes, expe_data_aug, **kwargs):
+    def __init__(self, n, normalization, classification_classes, experimental_data_aug,old_struc, **kwargs):
         super(res_net, self).__init__(**kwargs)
         self.norm = normalization
         self.n = n
         self.out_class = classification_classes
         self.conv2init = tf.keras.layers.Conv2D(16, kernel_size=3, strides=1, padding='same', kernel_initializer=tf.keras.initializers.HeNormal(), bias_initializer=tf.keras.initializers.Zeros())
-
+        if old_struc: # When saving the weights keras takes into account the initialization order, this variable enables to load the old models.
+            self.global_pooling = tf.keras.layers.GlobalAveragePooling2D()
+            self.classifier = tf.keras.layers.Dense(classification_classes)
         self.model = []
-        self.expe_data_aug = expe_data_aug
-        if expe_data_aug:
+        self.experimental_data_aug = experimental_data_aug
+        if experimental_data_aug:
             self.RF = tf.keras.layers.experimental.preprocessing.RandomFlip(mode='horizontal')
             self.pad = tf.keras.layers.ZeroPadding2D(padding=4)
             self.RC = tf.keras.layers.experimental.preprocessing.RandomCrop(32, 32)
 
         filters = [16, 32, 64]  # Taken from the ResNet paper
-        for block_nr, filter in enumerate(filters):
+
+        for block_nr, filter_block in enumerate(filters):
             for layer_in_block in range(n):
                 if layer_in_block == 0 and block_nr != 0:  # First layer in block and if not first filter block use projection shortcut
-                    self.model.append(resnet_block_type_a(filters=filter, stride=2, normalization=self.norm))
+                    self.model.append(resnet_block_type_a(filters=filter_block, stride=2, normalization=self.norm))
                 else:  # Second to las layers in block no projection shortcut
-                    self.model.append(resnet_block_type_a(filters=filter, stride=1, normalization=self.norm))
+                    self.model.append(resnet_block_type_a(filters=filter_block, stride=1, normalization=self.norm))
 
-        self.global_pooling = tf.keras.layers.GlobalAveragePooling2D()
-        self.classifier = tf.keras.layers.Dense(classification_classes)
+        if not old_struc:
+            self.global_pooling = tf.keras.layers.GlobalAveragePooling2D()
+            self.classifier = tf.keras.layers.Dense(classification_classes)
 
     def call(self, inputs, training=None, **kwargs):
-        if self.expe_data_aug:  # Data augmentation
+        if self.experimental_data_aug:  # Data augmentation
             y = self.RF(inputs)
             y = self.pad(y)
             inputs = self.RC(y)
@@ -135,7 +141,7 @@ class res_net(tf.keras.Model):
             y = res_layer(y)
 
         global_pooled = self.global_pooling(y)  # poole out
-        classified = self.classifier(global_pooled)  # classified out, no softmax since sparse categorical crossentropy works best without it.
+        classified = self.classifier(global_pooled)  # classified out, no softmax since sparse categorical cross entropy works best without it.
         return classified
 
     def summary(self, **kwargs):
@@ -143,13 +149,17 @@ class res_net(tf.keras.Model):
         model = tf.keras.Model(inputs=[x], outputs=self.call(x))
         return model.summary()
 
-    def build_graph(self, **kwargs):
+    def build_graph(self):
         x = tf.keras.layers.Input(shape=(32, 32, 3))
         model = tf.keras.Model(inputs=[x], outputs=self.call(x))
         return model
 
 
-def get_resnet_n(arguments):
+
+
+
+
+def get_resnet_n(arguments, plot =True, old_struc=False):
     """
     Implementation of the ResNet 20 as described in Deep Residual Learning for Image Recognition (https://arxiv.org/pdf/1512.03385.pdf)
     arguments['norm']: What normalization to use BN: for batch normalization or GN: for group normalization
@@ -157,25 +167,29 @@ def get_resnet_n(arguments):
     arguments['ResNet']: number of resnet blocks, e.g n=3 for Resnet20 and n=5 for ResNet32 as defined in Deep Residual Learning for Image Recognition (https://arxiv.org/pdf/1512.03385.pdf)
     :return: Compiled ResNet20 model
     """
-
     norm = arguments['norm']
-    model = res_net(n=arguments['ResNet'], normalization=norm, classification_classes=10, expe_data_aug=arguments['experimental_data_aug'])
 
     if arguments['weight_decay']:
         optimizer = tfa.optimizers.SGDW(weight_decay=0.0001, momentum=0.9)
     else:
         optimizer = tf.keras.optimizers.Adam()
 
-    print("ResNet block summary with projection shortcut, i.e. the las convolution is only used when projection shortcut is used")
-    res_block = resnet_block_type_a(filters=16, stride=2, normalization=norm)
-    res_block.summary()
-    print("ResNet block summary without projection shortcut, i.e. the las convolution is only used when projection shortcut is used")
-    res_block = resnet_block_type_a(filters=16, stride=2, normalization=norm)
-    res_block.summary()
+    if plot:
+        print("ResNet block summary with projection shortcut, i.e. the las convolution is only used when projection shortcut is used")
+        res_block = resnet_block_type_a(filters=16, stride=2, normalization=norm)
+        res_block.summary()
+        print("ResNet block summary without projection shortcut, i.e. the las convolution is only used when projection shortcut is used")
+        res_block = resnet_block_type_a(filters=16, stride=2, normalization=norm)
+        res_block.summary()
 
-    print("\n \nSummary of complete ResNet model")
+
+    model = res_net(n=arguments['ResNet'], normalization=norm, classification_classes=10, experimental_data_aug=arguments['experimental_data_aug'], old_struc=old_struc)
     model.compile(optimizer=optimizer, loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True), metrics=['sparse_categorical_accuracy'])
-    model.summary()
+
+    if plot:
+        print("\n \nSummary of complete ResNet model")
+        model.summary()
+
     init_epoch = 0
     return model, init_epoch
 
@@ -193,21 +207,26 @@ def save_model(path, model, epoch):
 
 def load_model_with_optimizer(arguments, path):
     model, init_ep = get_resnet_n(arguments)
+    model.build(input_shape=(None, 32, 32, 3))  # Build for visualization
     model.load_weights(path + '/weights.h5')
-    # model._make_train_function()
-    with open(path + '/optimizer.pkl', 'rb') as f:
-        weight_values = pickle.load(f)
+
     zero_grads = [tf.zeros_like(w) for w in model.trainable_variables]
     saved_vars = [tf.identity(w) for w in model.trainable_variables]
+
     model.optimizer.apply_gradients(zip(zero_grads, model.trainable_variables))
 
     [x.assign(y) for x, y in zip(model.trainable_variables, saved_vars)]
+
+    with open(path + '/optimizer.pkl', 'rb') as f:
+        weight_values = pickle.load(f)
+
     model.optimizer.set_weights(weight_values)
 
     return model
 
 
-def load_model_weights(arguments, path):
-    model, init_ep = get_resnet_n(arguments)
+def load_model_weights(arguments, path,old_struc):
+    model, init_ep = get_resnet_n(arguments, plot=False,old_struc=old_struc)
+    model.build(input_shape=(None, 32, 32, 3))  # Build for visualization
     model.load_weights(path + '/weights.h5')
     return model

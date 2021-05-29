@@ -23,7 +23,6 @@ def get_parsed_in():
 
     arguments = vars(parser.parse_args())
 
-
     if arguments['continue'] and arguments['replace']:
         print("Incompatible options to continue training and remove it to replace choose one or the other")
         sys.exit()
@@ -32,9 +31,9 @@ def get_parsed_in():
 
 def create_folders(arguments):
     if arguments['weight_decay']:
-        path = os.path.join(arguments['norm'], "ResNet" + str(arguments['ResNet']*6+2),"weight_decay" ,"epochs_"+ str(arguments['epochs']),"batch_" + str(arguments['batch_size']), "run_" + str(arguments['run']))
+        path = os.path.join(arguments['norm'], "ResNet" + str(arguments['ResNet'] * 6 + 2), "weight_decay", "epochs_" + str(arguments['epochs']), "batch_" + str(arguments['batch_size']), "run_" + str(arguments['run']))
     else:
-        path = os.path.join(arguments['norm'], "ResNet" + str(arguments['ResNet']*6+2),"no_weight_decay","epochs_"+ str(arguments['epochs']),"batch_" + str(arguments['batch_size']), "run_" + str(arguments['run']))
+        path = os.path.join(arguments['norm'], "ResNet" + str(arguments['ResNet'] * 6 + 2), "no_weight_decay", "epochs_" + str(arguments['epochs']), "batch_" + str(arguments['batch_size']), "run_" + str(arguments['run']))
 
     log_path = os.path.join("train_outputs/logs", path)
     models_path = os.path.join("train_outputs/checkpoints", path)
@@ -100,24 +99,32 @@ def prepare_dataset(image, label):
     return image, label
 
 
-
 def get_data(arguments):
     batch_size = arguments['batch_size']
 
-    (ds_train, ds_test), ds_info = tfds.load(
-        'cifar10',
-        split=['train', 'test'],
-        as_supervised=True,
-        with_info=True,
-    )
-    BUFFER_SIZE = 10000
-    if arguments['epochs'] == 30:
-        ds_train = ds_train.map(normalize_img).repeat(4).map(prepare_dataset).batch(batch_size).shuffle(BUFFER_SIZE).cache()
-    else:
-        ds_train = ds_train .map(normalize_img).batch(batch_size).shuffle(BUFFER_SIZE).cache()
+    (train, test), ds_info = tfds.load('cifar10', split=['train', 'test'], as_supervised=True, with_info=True)
 
-    ds_test = ds_test.map(normalize_img).batch(batch_size)
-    return ds_train, ds_test
+    buffer_size = 10000
+
+    if arguments['epochs'] == 30:
+        train = train.map(normalize_img).repeat(4).map(prepare_dataset).batch(batch_size).shuffle(buffer_size).cache()
+    else:
+        train = train.map(normalize_img).batch(batch_size).shuffle(buffer_size).cache()
+
+    test = test.map(normalize_img).batch(batch_size)
+
+    return train, test
+
+
+def get_test_data(arguments):
+
+    batch_size = arguments['batch_size']
+
+    (train, test), ds_info = tfds.load('cifar10', split=['train', 'test'], as_supervised=True, with_info=True)
+
+    test = test.map(normalize_img).batch(batch_size)
+
+    return test
 
 
 def select_device(arguments):
@@ -134,5 +141,3 @@ def select_device(arguments):
             print("GPU selected but no GPUs available")
             sys.exit(1)
     return device
-
-

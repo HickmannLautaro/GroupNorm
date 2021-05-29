@@ -1,13 +1,12 @@
-import pickle
+import os
+import shutil
+from datetime import datetime
 
 import numpy as np
 import tensorflow as tf
-import tensorflow_addons as tfa
-import os
-from utils.train_utils import get_parsed_in, create_folders, get_data, select_device
+
 from utils.ResNet_network import get_resnet_n, load_model_with_optimizer, save_model
-import shutil
-from datetime import datetime
+from utils.train_utils import get_parsed_in, create_folders, get_data, select_device
 
 
 class CustomSaveModel(tf.keras.callbacks.Callback):
@@ -17,7 +16,7 @@ class CustomSaveModel(tf.keras.callbacks.Callback):
         self.best_accuracy = accu
 
     def on_train_begin(self, logs=None):
-        print(f"Strating accuracy: {np.around(self.best_accuracy, 6)}")
+        print(f"Starting accuracy: {np.around(self.best_accuracy, 6)}")
 
     def on_epoch_end(self, epoch, logs=None):
         current = logs.get("val_sparse_categorical_accuracy")
@@ -74,11 +73,11 @@ def main():
 
     print("Tensorflow version: ", tf.__version__)
 
-    train, eval = get_data(arguments)
+    train_data, validation_data = get_data(arguments)
 
     if arguments['continue']:
 
-        latest = os.listdir(models_path)  # tf.train.latest_checkpoint(models_path)
+        latest = os.listdir(models_path)
         if not latest:
             mod = "Tried to load but none found, creating new model"
             model, init_ep = get_resnet_n(arguments)
@@ -91,7 +90,7 @@ def main():
                 init_ep = arguments['cont_epoch']
             mod = f"Loading model from {latest}, starting epoch {init_ep}"
             model = load_model_with_optimizer(arguments, models_path + '/' + latest)
-            best_accu = model.evaluate(eval)[1]
+            best_accu = model.evaluate(validation_data)[1]
     else:
         mod = "New model"
         model, init_ep = get_resnet_n(arguments)
@@ -99,7 +98,6 @@ def main():
 
     scheduler_callback = tf.keras.callbacks.LearningRateScheduler(get_scheduler(arguments))
     csv_logger = tf.keras.callbacks.CSVLogger(os.path.join(log_path, 'training.log'))
-    csv_logger_evaluation = tf.keras.callbacks.CSVLogger(os.path.join(log_path, 'evaluate.log'))
     tensorboard = tf.keras.callbacks.TensorBoard(log_dir=log_path, histogram_freq=10, write_graph=False, profile_batch=0)
 
     custom_save = CustomSaveModel(models_path, best_accu)
@@ -112,20 +110,20 @@ def main():
           f"\nepochs: {arguments['epochs']}"
           f"\nnormalization: {arguments['norm']}"
           f"\nUse weight decay: {arguments['weight_decay']}"
-          f"\nTrainning log in: {os.path.join(log_path, 'training.log')}"
-          f"\nTrainning checkpoints in: {models_path}"
+          f"\nTraining log in: {os.path.join(log_path, 'training.log')}"
+          f"\nTraining checkpoints in: {models_path}"
           f"\nTraining started at: {str(datetime.now())}"
           f"\n-----------------------------------------------------------------")
 
     # Validation on the test set as proposed in the ResNet paper Deep Residual Learning for Image Recognition (https://arxiv.org/pdf/1512.03385.pdf)
-    model.fit(train, epochs=arguments['epochs'], validation_data=eval, initial_epoch=init_ep, callbacks=[scheduler_callback, csv_logger, tensorboard, custom_save])  # Fromm 100 to 30 (25*4 + 5 extra )epochs
+    model.fit(train_data, epochs=arguments['epochs'], validation_data=validation_data, initial_epoch=init_ep, callbacks=[scheduler_callback, csv_logger, tensorboard, custom_save])  # Fromm 100 to 30 (25*4 + 5 extra) epochs
 
     # delete unused checkpoints
     chkpts = os.listdir(models_path)
     chkpts.sort()
     latest = chkpts[-1]
     chkpts = [os.path.join(models_path, x) for x in chkpts]
-    to_delete = [x for x in chkpts if not latest in x]
+    to_delete = [x for x in chkpts if latest not in x]
     for file in to_delete:
         print("Removed : ", file)
         shutil.rmtree(file)
